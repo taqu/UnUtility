@@ -158,73 +158,8 @@ void FRandomAliasSelect::Build(uint32 Size, float* Weights)
 {
     check(0<Size);
     check(nullptr != Weights);
-#if 0
-    LG3_ASSERT(0<size);
-    LG3_ASSERT(LG3_NULL != weights);
-    if(capacity_ < size) {
-        do{
-            capacity_ += 16UL;
-        }while(capacity_<size);
-        LG3_DELETE_ARRAY(weights_);
-        LG3_DELETE_ARRAY(aliases_);
-        weights_ = LG3_NEW f32[capacity_];
-        aliases_ = LG3_NEW u32[capacity_];
-    }
-    size_ = size;
-
-    // Kahan's summation
-    f32 total = 0.0f;
-    {
-        f32 c = 0.0f;
-        for(u32 i = 0; i < size; ++i) {
-            f32 x = weights[i] - c;
-            f32 t = total + x;
-            c = (t - total) - x;
-            total = t;
-        }
-    }
-
-    f32 average = total/size_;
-    f32 scale = (1.0e-7f<total)? static_cast<f32>(size_)/total : 0.0f;
-    u32* indices = LG3_NEW u32[capacity_];
-
-    s32 underfull = -1;
-    s32 overfull = static_cast<s32>(size_);
-    for(u32 i=0; i<size_; ++i){
-        if(average<=weights[i]){
-            --overfull;
-            indices[overfull] = i;
-        } else {
-            ++underfull;
-            indices[underfull] = i;
-        }
-    }
-    while(0<=underfull && overfull<static_cast<s32>(size_)){
-        u32 under = indices[underfull]; --underfull;
-        u32 over = indices[overfull]; ++overfull;
-        aliases_[under] = over;
-        weights_[under] = weights[under] * scale;
-        weights[over] += weights[under] - average;
-        if(weights[over]<average){
-            ++underfull;
-            indices[underfull] = over;
-        } else {
-            --overfull;
-            indices[overfull] = over;
-        }
-    }
-    while(0<=underfull){
-        weights_[indices[underfull]] = 1.0f;
-        --underfull;
-    }
-    while(overfull<static_cast<s32>(size_)){
-        weights_[indices[overfull]] = 1.0f;
-        ++overfull;
-    }
-    LG3_DELETE_ARRAY(indices);
-#endif
     if(Capacity_ < Size) {
-        Capacity_ = (Size+63UL)&~63UL;
+        Capacity_ = (Size+15UL)&~15UL;
         FMemory::Free(Weights_);
         Weights_ = static_cast<float*>(FMemory::Malloc(sizeof(float)*Capacity_*3));
         Aliases_ = reinterpret_cast<uint32*>(Weights_+Capacity_);
@@ -250,7 +185,7 @@ void FRandomAliasSelect::Build(uint32 Size, float* Weights)
     int32 Underfull = -1;
     int32 Overfull = static_cast<int32>(Size_);
     for(uint32 i=0; i<Size_; ++i){
-        if(Average<=Weights_[i]){
+        if(Average<=Weights[i]){
             --Overfull;
             Indices[Overfull] = i;
         } else {

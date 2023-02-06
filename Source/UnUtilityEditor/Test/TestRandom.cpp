@@ -9,7 +9,7 @@ bool FTestRandom::RunTest(const FString& Parameters)
 {
     FRandomAliasSelect RandomAliasSelect;
     FRandom Random;
-    float Weights[4] = {0.1f, 1.0f, 1.0f, 2.0f};
+    float Weights[4] = {0.0f, 1.0f, 1.0f, 2.0f};
     RandomAliasSelect.Build(sizeof(Weights)/sizeof(Weights[0]), Weights);
 
     uint32 Counts[4] = {};
