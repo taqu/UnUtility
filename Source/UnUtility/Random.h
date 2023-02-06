@@ -10,6 +10,9 @@ public:
     explicit FRandom(uint64 Seed);
     ~FRandom();
 
+    uint64 GetState() const;
+    void SetState(uint64 State);
+
     /**
     @brief Initialize with a seed.
     @param Seed
@@ -72,6 +75,14 @@ private:
     static constexpr UInt128 Multiplier = {2549297995355413924ULL, 4865540595714422341ULL};
     UInt128 Increment_;
     UInt128 State_;
+};
+
+//--- SplitMix
+//--------------------------------------------
+class SplitMix
+{
+public:
+    static uint64 Next(uint64& State);
 };
 
 /*
