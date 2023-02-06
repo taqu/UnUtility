@@ -1,14 +1,14 @@
 #pragma once
 #include <CoreMinimal.h>
 
-//--- FRandom32
+//--- FRandom
 //-------------------------
-class UNUTILITY_API FRandom32
+class UNUTILITY_API FRandom
 {
 public:
-    FRandom32();
-    explicit FRandom32(uint64 Seed);
-    ~FRandom32();
+    FRandom();
+    explicit FRandom(uint64 Seed);
+    ~FRandom();
 
     /**
     @brief Initialize with a seed.
@@ -25,6 +25,11 @@ public:
     @brief Generate a float in [0, 1)
     */
     float FRand();
+
+    inline uint32 operator()()
+    {
+        return Rand();
+    }
 private:
     static constexpr uint64 Increment = 0xDA3E39CB94B95BDBULL;
     static constexpr uint64 Multiplier = 0x5851F42D4C957F2DULL;
@@ -76,13 +81,13 @@ private:
 template<class T>
 uint32 RangeROpen(T& Random, uint32 s)
 {
-    uint32 x = Random.Rand();
+    uint32 x = Random();
     uint64 m = static_cast<uint64>(x) * static_cast<uint64>(s);
     uint32 l = static_cast<uint32>(m);
     if(l < s) {
         uint32 t = static_cast<uint32>(-static_cast<int32>(s) % s);
         while(l < t) {
-            x = Random.Rand();
+            x = Random();
             m = static_cast<uint64>(x) * static_cast<uint64>(s);
             l = static_cast<uint32>(m);
         }

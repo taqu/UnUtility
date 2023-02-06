@@ -1,22 +1,22 @@
 #include "Random.h"
 
-//--- FRandom32
+//--- FRandom
 //-------------------------
-FRandom32::FRandom32()
+FRandom::FRandom()
     : State_(0x853C49E6748FEA9BULL)
 {
 }
 
-FRandom32::FRandom32(uint64 InSeed)
+FRandom::FRandom(uint64 InSeed)
 {
     Seed(InSeed);
 }
 
-FRandom32::~FRandom32()
+FRandom::~FRandom()
 {
 }
 
-void FRandom32::Seed(uint64 InSeed)
+void FRandom::Seed(uint64 InSeed)
 {
     do {
         State_ = Increment * State_ + InSeed;
@@ -25,22 +25,22 @@ void FRandom32::Seed(uint64 InSeed)
 
 namespace
 {
-inline uint32 FRandom32_rotr32(uint32 X, uint32 R)
+inline uint32 FRandom32_RotR32(uint32 X, uint32 R)
 {
     return (X >> R) | (X << ((~R + 1) & 31U));
 }
 } // namespace
 
-uint32 FRandom32::Rand()
+uint32 FRandom::Rand()
 {
     uint64 X = State_;
     uint64 Count = static_cast<uint64>(X >> 59);
     State_ = X * Multiplier + Increment;
     X ^= X >> 18;
-    return FRandom32_rotr32(static_cast<uint32>(X >> 27), Count);
+    return FRandom32_RotR32(static_cast<uint32>(X >> 27), Count);
 }
 
-float FRandom32::FRand()
+float FRandom::FRand()
 {
     static constexpr uint32 M0 = 0x3F800000U;
     static constexpr uint32 M1 = 0x007FFFFFU;
@@ -147,7 +147,6 @@ FRandomAliasSelect::FRandomAliasSelect()
 FRandomAliasSelect::~FRandomAliasSelect()
 {
     FMemory::Free(Weights_);
-    FMemory::Free(Aliases_);
 }
 
 uint32 FRandomAliasSelect::Size() const
@@ -159,11 +158,75 @@ void FRandomAliasSelect::Build(uint32 Size, float* Weights)
 {
     check(0<Size);
     check(nullptr != Weights);
+#if 0
+    LG3_ASSERT(0<size);
+    LG3_ASSERT(LG3_NULL != weights);
+    if(capacity_ < size) {
+        do{
+            capacity_ += 16UL;
+        }while(capacity_<size);
+        LG3_DELETE_ARRAY(weights_);
+        LG3_DELETE_ARRAY(aliases_);
+        weights_ = LG3_NEW f32[capacity_];
+        aliases_ = LG3_NEW u32[capacity_];
+    }
+    size_ = size;
+
+    // Kahan's summation
+    f32 total = 0.0f;
+    {
+        f32 c = 0.0f;
+        for(u32 i = 0; i < size; ++i) {
+            f32 x = weights[i] - c;
+            f32 t = total + x;
+            c = (t - total) - x;
+            total = t;
+        }
+    }
+
+    f32 average = total/size_;
+    f32 scale = (1.0e-7f<total)? static_cast<f32>(size_)/total : 0.0f;
+    u32* indices = LG3_NEW u32[capacity_];
+
+    s32 underfull = -1;
+    s32 overfull = static_cast<s32>(size_);
+    for(u32 i=0; i<size_; ++i){
+        if(average<=weights[i]){
+            --overfull;
+            indices[overfull] = i;
+        } else {
+            ++underfull;
+            indices[underfull] = i;
+        }
+    }
+    while(0<=underfull && overfull<static_cast<s32>(size_)){
+        u32 under = indices[underfull]; --underfull;
+        u32 over = indices[overfull]; ++overfull;
+        aliases_[under] = over;
+        weights_[under] = weights[under] * scale;
+        weights[over] += weights[under] - average;
+        if(weights[over]<average){
+            ++underfull;
+            indices[underfull] = over;
+        } else {
+            --overfull;
+            indices[overfull] = over;
+        }
+    }
+    while(0<=underfull){
+        weights_[indices[underfull]] = 1.0f;
+        --underfull;
+    }
+    while(overfull<static_cast<s32>(size_)){
+        weights_[indices[overfull]] = 1.0f;
+        ++overfull;
+    }
+    LG3_DELETE_ARRAY(indices);
+#endif
     if(Capacity_ < Size) {
         Capacity_ = (Size+63UL)&~63UL;
         FMemory::Free(Weights_);
-        FMemory::Free(Aliases_);
-        Weights_ = static_cast<float*>(FMemory::Malloc(sizeof(float)*Capacity_*2));
+        Weights_ = static_cast<float*>(FMemory::Malloc(sizeof(float)*Capacity_*3));
         Aliases_ = reinterpret_cast<uint32*>(Weights_+Capacity_);
     }
     Size_ = Size;
@@ -180,43 +243,42 @@ void FRandomAliasSelect::Build(uint32 Size, float* Weights)
         }
     }
 
-    float average = Total/Size_;
-    float scale = (1.0e-7f<Total)? static_cast<float>(Size_)/Total : 0.0f;
-    uint32* indices = static_cast<uint32*>(FMemory::Malloc(sizeof(uint32)*Capacity_));
+    float Average = Total/Size_;
+    float Scale = (1.0e-7f<Total)? static_cast<float>(Size_)/Total : 0.0f;
+    uint32* Indices = reinterpret_cast<uint32*>(Aliases_+Capacity_);
 
-    int32 underfull = -1;
-    int32 overfull = static_cast<int32>(Size_);
+    int32 Underfull = -1;
+    int32 Overfull = static_cast<int32>(Size_);
     for(uint32 i=0; i<Size_; ++i){
-        if(average<=Weights_[i]){
-            --overfull;
-            indices[overfull] = i;
+        if(Average<=Weights_[i]){
+            --Overfull;
+            Indices[Overfull] = i;
         } else {
-            ++underfull;
-            indices[underfull] = i;
+            ++Underfull;
+            Indices[Underfull] = i;
         }
     }
-    while(0<=underfull && overfull<static_cast<int32>(Size_)){
-        uint32 under = indices[underfull]; --underfull;
-        uint32 over = indices[overfull]; ++overfull;
+    while(0<=Underfull && Overfull<static_cast<int32>(Size_)){
+        uint32 under = Indices[Underfull]; --Underfull;
+        uint32 over = Indices[Overfull]; ++Overfull;
         Aliases_[under] = over;
-        Weights_[under] = Weights[under] * scale;
-        Weights[over] += Weights[under] - average;
-        if(Weights[over]<average){
-            ++underfull;
-            indices[underfull] = over;
+        Weights_[under] = Weights[under] * Scale;
+        Weights[over] += Weights[under] - Average;
+        if(Weights[over]<Average){
+            ++Underfull;
+            Indices[Underfull] = over;
         } else {
-            --overfull;
-            indices[overfull] = over;
+            --Overfull;
+            Indices[Overfull] = over;
         }
     }
-    while(0<=underfull){
-        Weights_[indices[underfull]] = 1.0f;
-        --underfull;
+    while(0<=Underfull){
+        Weights_[Indices[Underfull]] = 1.0f;
+        --Underfull;
     }
-    while(overfull<static_cast<int32>(Size_)){
-        Weights_[indices[overfull]] = 1.0f;
-        ++overfull;
+    while(Overfull<static_cast<int32>(Size_)){
+        Weights_[Indices[Overfull]] = 1.0f;
+        ++Overfull;
     }
-    FMemory::Free(indices);
 }
 
